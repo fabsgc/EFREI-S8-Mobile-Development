@@ -10,152 +10,63 @@ import Foundation
 
 class CalculatorBrain{
     
-    var variableValues = [String:Double]()
+    fileprivate var accumulator = 0.0
+    fileprivate var internalProgram = [AnyObject]()
     
-    private var resultAccumulator = 0.0
-    private var internalProgram = [AnyObject]()
-    
-    private var currentPrecedence = Precedence.Max
-    
-    private var isPartialResult: Bool {
-        get {
-            return pending != nil
-        }
-    }
-    
-    private enum Precedence: Int {
-        case Min = 0, Max
-    }
-    
-    var description: String {
-        get {
-            if pending == nil {
-                return descriptionAccumulator
-            }
-            else {
-                return pending!.descriptionFunction(pending!.descriptionOperand, pending!.descriptionOperand != descriptionAccumulator ? descriptionAccumulator : "")
-            }
-        }
-    }
-    
-    private var descriptionAccumulator = "0" {
-        didSet {
-            if pending == nil {
-                currentPrecedence = Precedence.Max
-            }
-        }
-    }
-    
-    private var operations: Dictionary<String,Operation> = [
-        "π" : Operation.Constant(M_PI),
-        "e" : Operation.Constant(M_E),
-        "±" : Operation.UnaryOperation({ -$0 }, { "-(\($0))"}),
-        "√" : Operation.UnaryOperation(sqrt, { "√(\($0))"}),
-        "cos" : Operation.UnaryOperation(cos, { "cos(\($0))"}),
-        "x⁻¹" : Operation.UnaryOperation({ 1 / $0 }, { "(\($0))⁻1"}),
-        "x²" : Operation.UnaryOperation({ $0 * $0 }, { "(\($0))²"}),
-        "×" : Operation.BinaryOperation({ $0 * $1 }, { "\($0) × \($1)"}, Precedence.Max),
-        "÷" : Operation.BinaryOperation({ $0 / $1 }, { "\($0) ÷ \($1)"}, Precedence.Max),
-        "+" : Operation.BinaryOperation({ $0 + $1 }, { "\($0) + \($1)"}, Precedence.Min),
-        "−" : Operation.BinaryOperation({ $0 - $1 }, { "\($0) - \($1)"}, Precedence.Min),
-        "rand" : Operation.NullaryOperation( { Double(arc4random()) }, "arc4random()"),
-        "=" : Operation.Equals
-    ]
-    
-    private enum Operation {
-        case Constant(Double)
-        case UnaryOperation((Double) -> Double, (String) -> String)
-        case BinaryOperation((Double, Double) -> Double, (String, String) -> String, Precedence)
-        case NullaryOperation(() -> Double, String)
-        case Equals
-    }
-    
-    func setOperand(_ operand: Double) {
-        resultAccumulator = operand
-        descriptionAccumulator = String(format:"%g", operand)
+    func setOperand(_ operand: Double){
+        accumulator = operand
         internalProgram.append(operand as AnyObject)
     }
     
-    func setOperand(_ variableName: String) {
-        variableValues[variableName] = variableValues[variableName] ?? 0.0
-        resultAccumulator = variableValues[variableName]!
-        descriptionAccumulator = variableName
-        internalProgram.append(variableName as AnyObject)
+    fileprivate var operations: Dictionary<String,Operation> = [
+        "π" : Operation.constant(M_PI),
+        "e" : Operation.constant(M_E),
+        "±" : Operation.unaryOperation({ -$0 }),
+        "√" : Operation.unaryOperation(sqrt),
+        "cos" : Operation.unaryOperation(cos),
+        "×" : Operation.binaryOperation({ $0 * $1 }),
+        "÷" : Operation.binaryOperation({ $0 / $1 }),
+        "+" : Operation.binaryOperation({ $0 + $1 }),
+        "−" : Operation.binaryOperation({ $0 - $1 }),
+        "=" : Operation.equals
+    ]
+    
+    fileprivate enum Operation{
+        case constant(Double)
+        case unaryOperation((Double) -> Double)
+        case binaryOperation((Double, Double) -> Double)
+        case equals
     }
     
-    func performOperation(symbol: String) {
+    func performOperation(_ symbol: String){
         internalProgram.append(symbol as AnyObject)
-        
         if let operation = operations[symbol] {
-            switch operation {
-                
-            case .Constant(let value):
-                resultAccumulator = value
-                descriptionAccumulator = symbol
-                
-            case .NullaryOperation(let function, let descriptionValue):
-                resultAccumulator = function()
-                descriptionAccumulator = descriptionValue
-                
-            case .UnaryOperation(let resultFunction, let descriptionFunction):
-                resultAccumulator = resultFunction(resultAccumulator)
-                descriptionAccumulator = descriptionFunction(descriptionAccumulator)
-                
-            case .BinaryOperation(let resultFunction, let descriptionFunction, let precedence):
+            switch operation{
+            case .constant(let value):
+                accumulator = value
+            case .unaryOperation(let function):
+                accumulator = function(accumulator)
+            case .binaryOperation(let function):
                 executePendingOperation()
-                
-                if currentPrecedence.rawValue < precedence.rawValue {
-                    descriptionAccumulator = "(\(descriptionAccumulator))"
-                }
-                
-                currentPrecedence = precedence
-                pending = PendingOperationInfo(binaryFunction: resultFunction, firstOperand: resultAccumulator, descriptionFunction: descriptionFunction, descriptionOperand: descriptionAccumulator)
-                
-            case .Equals:
+                pending = PendingBinaryOperationInfo(binaryFunction: function, firstOperand: accumulator)
+            case .equals:
                 executePendingOperation()
-                
             }
         }
     }
     
-    func clear() {
-        pending = nil
-        resultAccumulator = 0.0
-        descriptionAccumulator = "0"
-        internalProgram.removeAll()
-    }
-    
-    func undo() {
-        if !internalProgram.isEmpty {
-            internalProgram.removeLast()
-            program = internalProgram as CalculatorBrain.PropertyList
-        } else {
-            clear()
-            descriptionAccumulator = ""
-        }
-    }
-    
-    private func executePendingOperation() {
+    fileprivate func executePendingOperation(){
         if pending != nil {
-            resultAccumulator = pending!.binaryFunction(pending!.firstOperand, resultAccumulator)
-            descriptionAccumulator = pending!.descriptionFunction(pending!.descriptionOperand, descriptionAccumulator)
+            accumulator = pending!.binaryFunction(pending!.firstOperand, accumulator)
             pending = nil
         }
     }
     
-    private var pending: PendingOperationInfo?
+    fileprivate var pending: PendingBinaryOperationInfo?
     
-    private struct PendingOperationInfo {
+    fileprivate struct PendingBinaryOperationInfo{
         var binaryFunction: (Double, Double) -> Double
         var firstOperand: Double
-        var descriptionFunction: (String, String) -> String
-        var descriptionOperand: String
-    }
-    
-    var result: Double {
-        get {
-            return resultAccumulator
-        }
     }
     
     typealias PropertyList = AnyObject
@@ -164,7 +75,8 @@ class CalculatorBrain{
         get {
             return internalProgram as CalculatorBrain.PropertyList
         }
-        set {
+        
+        set{
             clear()
             
             if let arrayOfOps = newValue as? [AnyObject] {
@@ -172,20 +84,23 @@ class CalculatorBrain{
                     if let operand = op as? Double {
                         setOperand(operand)
                     }
-                    else if let variableName = op as? String {
-                        if variableValues[variableName] != nil {
-                            setOperand(variableName)
-                        } else if let operation = op as? String {
-                            performOperation(symbol: operation)
-                        }
+                    else if let operation = op as? String {
+                        performOperation(operation)
                     }
                 }
             }
         }
     }
     
-    func getDescription() -> String {
-        let whitespace = (description.hasSuffix(" ") ? "" : " ")
-        return isPartialResult ? (description + whitespace  + "...") : (description + whitespace  + "=")
+    func clear(){
+        accumulator = 0.0
+        pending = nil
+        internalProgram.removeAll()
+    }
+    
+    var result: Double{
+        get{
+            return accumulator
+        }
     }
 }
