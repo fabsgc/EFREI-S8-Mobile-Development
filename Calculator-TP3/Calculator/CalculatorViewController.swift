@@ -15,7 +15,7 @@ struct Constants {
     }
 }
 
-class ViewController: UIViewController {
+class CalcultorViewController: UIViewController {
 
     @IBOutlet fileprivate weak var display: UILabel!
     @IBOutlet weak var descriptionLabel: UILabel!
