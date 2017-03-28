@@ -17,7 +17,7 @@ class CalculatorBrain{
     
     private var currentPrecedence = Precedence.Max
     
-    private var isPartialResult: Bool {
+    public var isPartialResult: Bool {
         get {
             return pending != nil
         }

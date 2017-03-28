@@ -13,12 +13,22 @@ struct Constants {
         static let numberOfDigitsAfterDecimalPoint = 6
         static let variableName = "M"
     }
+    
+    struct Drawing {
+        static let pointsPerUnit = 50.0
+    }
+    
+    struct Error {
+        static let data = "Aucune source n'a été trouvée"
+        static let partialResult = "Vous essayez d'afficher une expression incomplète"
+    }
 }
 
 class CalcultorViewController: UIViewController {
 
     @IBOutlet fileprivate weak var display: UILabel!
     @IBOutlet weak var descriptionLabel: UILabel!
+    @IBOutlet weak var graphicButton: UIButton!
     
     var userIsInTheMiddleOfTyping = false
     var savedProgram: CalculatorBrain.PropertyList?
@@ -28,6 +38,8 @@ class CalcultorViewController: UIViewController {
     fileprivate func updateInterface() {
         descriptionLabel.text = (brain.description.isEmpty ? " " : brain.getDescription())
         displayValue = brain.result
+        
+        graphicButton.isEnabled = !brain.isPartialResult
     }
     
     fileprivate var displayValue: Double? {
@@ -144,6 +156,34 @@ class CalcultorViewController: UIViewController {
         brain.setOperand(Constants.Math.variableName)
         userIsInTheMiddleOfTyping = false
         updateInterface()
+    }
+    
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        if let identifier = segue.identifier {
+            switch identifier {
+            case "Show Graph":
+                guard !brain.isPartialResult else {
+                    NSLog(Constants.Error.partialResult)
+                    return
+                }
+                
+                var destinationVC = segue.destination
+                if let nvc = destinationVC as? UINavigationController {
+                    destinationVC = nvc.visibleViewController ?? destinationVC
+                }
+                
+                if let vc = destinationVC as? GraphicViewController {
+                    vc.navigationItem.title = brain.description
+                    vc.function = {
+                        (x: CGFloat) -> Double in
+                        self.brain.variableValues[Constants.Math.variableName] = Double(x)
+                        self.brain.program = self.brain.program
+                        return self.brain.result
+                    }
+                }
+            default: break
+            }
+        }
     }
 }
 
